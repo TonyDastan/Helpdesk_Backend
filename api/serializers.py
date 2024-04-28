@@ -12,8 +12,6 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 
-
-
 class ChangePasswordSerializer(serializers.Serializer):
     model = User
 

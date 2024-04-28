@@ -1,7 +1,8 @@
 from rest_framework.views import APIView
+from rest_framework.generics import UpdateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from api.models import User
-from api.serializers import UserSerializer
+from api.serializers import UserSerializer, ChangePasswordSerializer
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate, login
@@ -28,7 +29,7 @@ class RegisterUser(APIView):
             serializer.save()
             message = {'save': True}
             return Response(message)
-        
+
         message = {'save': False, 'errors': serializer.errors}
         return Response(message)
 
@@ -75,4 +76,56 @@ class GetUser(APIView):
         else:
             return Response({'message': 'Wrong Request!'})
 
+
+class ChangePasswordView(UpdateAPIView):
+    serializer_class = ChangePasswordSerializer
+    model = User
+    permission_classes = IsAuthenticated
+
+    def get_object(self, queryset=None):
+        obj = self.request.user
+        return obj
+
+    def update(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            # Check old password
+            if not self.object.check_password(serializer.data.get("old_password")):
+                return Response({"old_password": ["Wrong password."]}, status=status.HTTP_400_BAD_REQUEST)
+            # set_password also hashes the password that the user will get
+            self.object.set_password(serializer.data.get("new_password"))
+            self.object.save()
+            response = {
+                'status': 'success',
+                'code': status.HTTP_200_OK,
+                'message': 'Password updated successfully',
+                'data': []
+            }
+            return Response(response)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UpdateUserView(APIView):
+    permission_classes = AllowAny
+
+    @staticmethod
+    def post(request):
+        username = request.data("username")
+        email = request.data("email")
+        contact = request.data("contact")
+        location = request.data("location")
+        if contact:
+            try:
+                query = User.objects.get(contact=contact)
+                query.username = username
+                query.email = email
+                query.location = location
+                query.save()
+                return Response({'save': True, "user": UserSerializer(instance=query, many=False).data})
+            except User.DoesNotExist:
+                return Response({'message': 'You can not change the email'})
+        else:
+            return Response({'message': 'Not Authorized to Update This User'})
 
